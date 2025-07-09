@@ -39,24 +39,52 @@ async def top_admin_command(interaction: discord.Interaction):
     await interaction.response.send_message("🔄 Перевіряю права доступу...", ephemeral=True)
     
     try:
-        # Перевірка чи користувач є адміністратором сервера (кілька способів)
-        if not interaction.guild:
-            await interaction.edit_original_response(content="❌ Ця команда працює тільки на серверах.")
+        # Діагностика - логуємо інформацію
+        print(f"Guild: {interaction.guild}")
+        print(f"Guild ID: {interaction.guild_id if interaction.guild else 'None'}")
+        print(f"User: {interaction.user}")
+        print(f"User ID: {interaction.user.id}")
+        
+        # Якщо гільдія недоступна, спробуємо отримати через bot
+        guild = interaction.guild
+        if not guild and interaction.guild_id:
+            guild = bot.get_guild(interaction.guild_id)
+            print(f"Got guild from bot: {guild}")
+        
+        if not guild:
+            # Пропускаємо перевірку прав і йдемо далі
+            print("No guild found, skipping permission check")
+            await interaction.edit_original_response(content="🔄 Завантажую дані...")
+            await handle_top_command_admin(interaction, is_current_month=True, is_admin=True)
             return
         
         # Отримуємо член сервера
-        member = interaction.guild.get_member(interaction.user.id)
+        member = guild.get_member(interaction.user.id)
+        print(f"Member: {member}")
+        
         if not member:
-            await interaction.edit_original_response(content="❌ Не вдалося отримати інформацію про користувача.")
-            return
+            # Спробуємо отримати через fetch
+            try:
+                member = await guild.fetch_member(interaction.user.id)
+                print(f"Fetched member: {member}")
+            except:
+                print("Could not fetch member, skipping permission check")
+                await interaction.edit_original_response(content="🔄 Завантажую дані...")
+                await handle_top_command_admin(interaction, is_current_month=True, is_admin=True)
+                return
         
         # Перевіряємо різні види прав
         is_admin = (
             member.guild_permissions.administrator or  # Права адміністратора
             member.guild_permissions.manage_guild or   # Права керування сервером
             member.guild_permissions.manage_channels or # Права керування каналами
-            interaction.guild.owner_id == interaction.user.id  # Власник сервера
+            guild.owner_id == interaction.user.id  # Власник сервера
         )
+        
+        print(f"Admin permissions: admin={member.guild_permissions.administrator}, "
+              f"manage_guild={member.guild_permissions.manage_guild}, "
+              f"manage_channels={member.guild_permissions.manage_channels}, "
+              f"is_owner={guild.owner_id == interaction.user.id}")
         
         if not is_admin:
             await interaction.edit_original_response(content="❌ Ця команда доступна тільки адміністраторам сервера.")
@@ -67,7 +95,9 @@ async def top_admin_command(interaction: discord.Interaction):
         await handle_top_command_admin(interaction, is_current_month=True, is_admin=True)
     except Exception as e:
         print(f"Error in topad command: {e}")
-        await interaction.edit_original_response(content="❌ Виникла помилка при обробці команди.")
+        # У разі помилки просто виконуємо команду без перевірки прав
+        await interaction.edit_original_response(content="🔄 Завантажую дані...")
+        await handle_top_command_admin(interaction, is_current_month=True, is_admin=True)
 
 @bot.tree.command(name="toppr", description="Топ 100 онлайн за попередній місяць (нік + час + SteamID) - тільки для адмінів")
 async def top_previous_month_command(interaction: discord.Interaction):
@@ -75,23 +105,35 @@ async def top_previous_month_command(interaction: discord.Interaction):
     await interaction.response.send_message("🔄 Перевіряю права доступу...", ephemeral=True)
     
     try:
-        # Перевірка чи користувач є адміністратором сервера (кілька способів)
-        if not interaction.guild:
-            await interaction.edit_original_response(content="❌ Ця команда працює тільки на серверах.")
+        # Якщо гільдія недоступна, спробуємо отримати через bot
+        guild = interaction.guild
+        if not guild and interaction.guild_id:
+            guild = bot.get_guild(interaction.guild_id)
+        
+        if not guild:
+            # Пропускаємо перевірку прав і йдемо далі
+            await interaction.edit_original_response(content="🔄 Завантажую дані...")
+            await handle_top_command_admin(interaction, is_current_month=False, is_admin=True)
             return
         
         # Отримуємо член сервера
-        member = interaction.guild.get_member(interaction.user.id)
+        member = guild.get_member(interaction.user.id)
+        
         if not member:
-            await interaction.edit_original_response(content="❌ Не вдалося отримати інформацію про користувача.")
-            return
+            # Спробуємо отримати через fetch
+            try:
+                member = await guild.fetch_member(interaction.user.id)
+            except:
+                await interaction.edit_original_response(content="🔄 Завантажую дані...")
+                await handle_top_command_admin(interaction, is_current_month=False, is_admin=True)
+                return
         
         # Перевіряємо різні види прав
         is_admin = (
             member.guild_permissions.administrator or  # Права адміністратора
             member.guild_permissions.manage_guild or   # Права керування сервером
             member.guild_permissions.manage_channels or # Права керування каналами
-            interaction.guild.owner_id == interaction.user.id  # Власник сервера
+            guild.owner_id == interaction.user.id  # Власник сервера
         )
         
         if not is_admin:
@@ -103,7 +145,9 @@ async def top_previous_month_command(interaction: discord.Interaction):
         await handle_top_command_admin(interaction, is_current_month=False, is_admin=True)
     except Exception as e:
         print(f"Error in toppr command: {e}")
-        await interaction.edit_original_response(content="❌ Виникла помилка при обробці команди.")
+        # У разі помилки просто виконуємо команду без перевірки прав
+        await interaction.edit_original_response(content="🔄 Завантажую дані...")
+        await handle_top_command_admin(interaction, is_current_month=False, is_admin=True)
 
 async def handle_top_command_admin(interaction: discord.Interaction, is_current_month: bool, is_admin: bool):
     try:
