@@ -161,8 +161,8 @@ async def handle_top_command_admin(interaction: discord.Interaction, is_current_
         leaderboard_message = ""
         for i, player in enumerate(players_list):
             if is_admin:
-                # Формат для адмінів: "1. 76561198123456789 нік: PlayerName: 1d 2h 3m 4s"
-                line = f"{i + 1}. **{player.steam_id}** нік: **{player.name}**: {Tools.format_time(player.value)}"
+                # Формат для адмінів: "1. 76561198123456789 PlayerName: 1d 2h 3m 4s"
+                line = f"{i + 1}. **{player.steam_id}** **{player.name}**: {Tools.format_time(player.value)}"
             else:
                 # Формат для звичайних користувачів: "1. PlayerName: 1d 2h 3m 4s"
                 line = f"{i + 1}. **{player.name}**: {Tools.format_time(player.value)}"
@@ -202,8 +202,8 @@ async def handle_top_command(interaction: discord.Interaction, is_current_month:
         leaderboard_message = ""
         for i, player in enumerate(players_list):
             if is_admin:
-                # Формат для адмінів: "1. 76561198123456789 нік: PlayerName: 1d 2h 3m 4s"
-                line = f"{i + 1}. **{player.steam_id}** нік: **{player.name}**: {Tools.format_time(player.value)}"
+                # Формат для адмінів: "1. 76561198123456789 PlayerName: 1d 2h 3m 4s"
+                line = f"{i + 1}. **{player.steam_id}** **{player.name}**: {Tools.format_time(player.value)}"
             else:
                 # Формат для звичайних користувачів: "1. PlayerName: 1d 2h 3m 4s"
                 line = f"{i + 1}. **{player.name}**: {Tools.format_time(player.value)}"
