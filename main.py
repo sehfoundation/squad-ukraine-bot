@@ -37,11 +37,16 @@ async def top_previous_month_command(interaction: discord.Interaction):
     await handle_top_command(interaction, is_current_month=False, is_admin=True)
 
 async def handle_top_command(interaction: discord.Interaction, is_current_month: bool, is_admin: bool):
-    await interaction.response.defer()
+    # Відповідаємо відразу, що починаємо обробку
+    await interaction.response.send_message("🔄 Завантажую дані...", ephemeral=True)
     
     try:
         parser = Parser()
         players_list = await parser.fetch_and_parse_leaderboard(is_admin, is_current_month)
+        
+        if not players_list:
+            await interaction.edit_original_response(content="❌ Не вдалося отримати дані. Спробуйте пізніше.")
+            return
         
         leaderboard_message = ""
         for i, player in enumerate(players_list):
@@ -49,6 +54,11 @@ async def handle_top_command(interaction: discord.Interaction, is_current_month:
             if is_admin:
                 line += f" — {player.steam_id}"
             leaderboard_message += line + "\n"
+            
+            # Обмежуємо довжину повідомлення Discord (макс 4096 символів в embed description)
+            if len(leaderboard_message) > 3900:
+                leaderboard_message += "... (показано перші результати)"
+                break
         
         embed = discord.Embed(
             title="Top 100 Online — SQUAD UKRAINE",
@@ -56,10 +66,12 @@ async def handle_top_command(interaction: discord.Interaction, is_current_month:
             color=discord.Color.blue()
         )
         
-        await interaction.followup.send(embed=embed)
+        # Редагуємо початкове повідомлення
+        await interaction.edit_original_response(content=None, embed=embed)
+        
     except Exception as e:
         print(f"Error in top command: {e}")
-        await interaction.followup.send("Виникла помилка при отриманні даних. Спробуйте пізніше.")
+        await interaction.edit_original_response(content="❌ Виникла помилка при отриманні даних. Спробуйте пізніше.")
 
 async def main():
     token = os.getenv('TOKEN_BOT')
