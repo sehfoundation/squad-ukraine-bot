@@ -39,8 +39,26 @@ async def top_admin_command(interaction: discord.Interaction):
     await interaction.response.send_message("🔄 Перевіряю права доступу...", ephemeral=True)
     
     try:
-        # Перевірка чи користувач є адміністратором сервера
-        if not interaction.guild or not interaction.user.guild_permissions.administrator:
+        # Перевірка чи користувач є адміністратором сервера (кілька способів)
+        if not interaction.guild:
+            await interaction.edit_original_response(content="❌ Ця команда працює тільки на серверах.")
+            return
+        
+        # Отримуємо член сервера
+        member = interaction.guild.get_member(interaction.user.id)
+        if not member:
+            await interaction.edit_original_response(content="❌ Не вдалося отримати інформацію про користувача.")
+            return
+        
+        # Перевіряємо різні види прав
+        is_admin = (
+            member.guild_permissions.administrator or  # Права адміністратора
+            member.guild_permissions.manage_guild or   # Права керування сервером
+            member.guild_permissions.manage_channels or # Права керування каналами
+            interaction.guild.owner_id == interaction.user.id  # Власник сервера
+        )
+        
+        if not is_admin:
             await interaction.edit_original_response(content="❌ Ця команда доступна тільки адміністраторам сервера.")
             return
         
@@ -57,8 +75,26 @@ async def top_previous_month_command(interaction: discord.Interaction):
     await interaction.response.send_message("🔄 Перевіряю права доступу...", ephemeral=True)
     
     try:
-        # Перевірка чи користувач є адміністратором сервера
-        if not interaction.guild or not interaction.user.guild_permissions.administrator:
+        # Перевірка чи користувач є адміністратором сервера (кілька способів)
+        if not interaction.guild:
+            await interaction.edit_original_response(content="❌ Ця команда працює тільки на серверах.")
+            return
+        
+        # Отримуємо член сервера
+        member = interaction.guild.get_member(interaction.user.id)
+        if not member:
+            await interaction.edit_original_response(content="❌ Не вдалося отримати інформацію про користувача.")
+            return
+        
+        # Перевіряємо різні види прав
+        is_admin = (
+            member.guild_permissions.administrator or  # Права адміністратора
+            member.guild_permissions.manage_guild or   # Права керування сервером
+            member.guild_permissions.manage_channels or # Права керування каналами
+            interaction.guild.owner_id == interaction.user.id  # Власник сервера
+        )
+        
+        if not is_admin:
             await interaction.edit_original_response(content="❌ Ця команда доступна тільки адміністраторам сервера.")
             return
         
