@@ -47,12 +47,18 @@ class Parser:
     
     async def fetch_and_parse_leaderboard(self, is_admin: bool = False, is_current_month: bool = True) -> List[Player]:
         """Отримує і парсить дані лідерборду з серверів"""
+        print(f"Starting leaderboard fetch - admin: {is_admin}, current_month: {is_current_month}")
+        
         url_sq1 = f"https://api.battlemetrics.com/servers/{Settings.SERVER_ID_SQ_1}/relationships/leaderboards/time"
         url_sq2 = f"https://api.battlemetrics.com/servers/{Settings.SERVER_ID_SQ_2}/relationships/leaderboards/time"
         
         page_size = 100
         period = Tools.get_period() if is_current_month else Tools.get_previous_month_period()
         print(f"Period: {period}")
+        
+        if not Settings.TOKEN_BM:
+            print("ERROR: TOKEN_BM is empty!")
+            return []
         
         headers = {
             'Accept': 'application/json',
@@ -66,17 +72,29 @@ class Parser:
         
         players = []
         
-        async with aiohttp.ClientSession() as session:
-            await self._fetch_players_from_server(session, url_sq1, params, headers, players)
-            await self._fetch_players_from_server(session, url_sq2, params, headers, players)
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+                await self._fetch_players_from_server(session, url_sq1, params, headers, players)
+                await self._fetch_players_from_server(session, url_sq2, params, headers, players)
+            
+            print(f"Fetched {len(players)} players before deduplication")
+            
+            players = await self._remove_duplicate_players(players)
+            print(f"After deduplication: {len(players)} players")
+            
+            if is_admin:
+                print("Fetching Steam IDs...")
+                await self._fetch_steam_ids_for_players(players)
+                print("Steam IDs fetched")
+            
+            sorted_players = sorted(players, key=lambda x: x.value, reverse=True)
+            result = sorted_players[:100]
+            print(f"Returning {len(result)} players")
+            return result
         
-        players = await self._remove_duplicate_players(players)
-        
-        if is_admin:
-            await self._fetch_steam_ids_for_players(players)
-        
-        sorted_players = sorted(players, key=lambda x: x.value, reverse=True)
-        return sorted_players[:100]
+        except Exception as e:
+            print(f"Error in fetch_and_parse_leaderboard: {e}")
+            return []
     
     async def _fetch_players_from_server(self, session: aiohttp.ClientSession, url: str, 
                                        params: Dict[str, str], headers: Dict[str, str], 
