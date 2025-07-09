@@ -35,19 +35,77 @@ async def top_command(interaction: discord.Interaction):
 
 @bot.tree.command(name="topad", description="Топ 100 онлайн за поточний місяць (нік + час + SteamID) - тільки для адмінів")
 async def top_admin_command(interaction: discord.Interaction):
-    # Перевірка чи користувач є адміністратором сервера
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("❌ Ця команда доступна тільки адміністраторам сервера.", ephemeral=True)
-        return
-    await handle_top_command(interaction, is_current_month=True, is_admin=True)
+    # Відповідаємо спочатку, потім перевіряємо права
+    await interaction.response.send_message("🔄 Перевіряю права доступу...", ephemeral=True)
+    
+    try:
+        # Перевірка чи користувач є адміністратором сервера
+        if not interaction.guild or not interaction.user.guild_permissions.administrator:
+            await interaction.edit_original_response(content="❌ Ця команда доступна тільки адміністраторам сервера.")
+            return
+        
+        # Оновлюємо повідомлення та продовжуємо
+        await interaction.edit_original_response(content="🔄 Завантажую дані...")
+        await handle_top_command_admin(interaction, is_current_month=True, is_admin=True)
+    except Exception as e:
+        print(f"Error in topad command: {e}")
+        await interaction.edit_original_response(content="❌ Виникла помилка при обробці команди.")
 
 @bot.tree.command(name="toppr", description="Топ 100 онлайн за попередній місяць (нік + час + SteamID) - тільки для адмінів")
 async def top_previous_month_command(interaction: discord.Interaction):
-    # Перевірка чи користувач є адміністратором сервера
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("❌ Ця команда доступна тільки адміністраторам сервера.", ephemeral=True)
-        return
-    await handle_top_command(interaction, is_current_month=False, is_admin=True)
+    # Відповідаємо спочатку, потім перевіряємо права
+    await interaction.response.send_message("🔄 Перевіряю права доступу...", ephemeral=True)
+    
+    try:
+        # Перевірка чи користувач є адміністратором сервера
+        if not interaction.guild or not interaction.user.guild_permissions.administrator:
+            await interaction.edit_original_response(content="❌ Ця команда доступна тільки адміністраторам сервера.")
+            return
+        
+        # Оновлюємо повідомлення та продовжуємо
+        await interaction.edit_original_response(content="🔄 Завантажую дані...")
+        await handle_top_command_admin(interaction, is_current_month=False, is_admin=True)
+    except Exception as e:
+        print(f"Error in toppr command: {e}")
+        await interaction.edit_original_response(content="❌ Виникла помилка при обробці команди.")
+
+async def handle_top_command_admin(interaction: discord.Interaction, is_current_month: bool, is_admin: bool):
+    try:
+        parser = Parser()
+        players_list = await parser.fetch_and_parse_leaderboard(is_admin, is_current_month)
+        
+        if not players_list:
+            await interaction.edit_original_response(content="❌ Не вдалося отримати дані. Спробуйте пізніше.")
+            return
+        
+        leaderboard_message = ""
+        for i, player in enumerate(players_list):
+            if is_admin:
+                # Формат для адмінів: "1. 76561198123456789 нік: PlayerName: 1d 2h 3m 4s"
+                line = f"{i + 1}. **{player.steam_id}** нік: **{player.name}**: {Tools.format_time(player.value)}"
+            else:
+                # Формат для звичайних користувачів: "1. PlayerName: 1d 2h 3m 4s"
+                line = f"{i + 1}. **{player.name}**: {Tools.format_time(player.value)}"
+            
+            leaderboard_message += line + "\n"
+            
+            # Обмежуємо довжину повідомлення Discord (макс 4096 символів в embed description)
+            if len(leaderboard_message) > 3900:
+                leaderboard_message += "... (показано перші результати)"
+                break
+        
+        embed = discord.Embed(
+            title="Top 100 Online — SQUAD UKRAINE",
+            description=leaderboard_message,
+            color=discord.Color.blue()
+        )
+        
+        # Редагуємо початкове повідомлення
+        await interaction.edit_original_response(content=None, embed=embed)
+        
+    except Exception as e:
+        print(f"Error in admin top command: {e}")
+        await interaction.edit_original_response(content="❌ Виникла помилка при отриманні даних. Спробуйте пізніше.")
 
 async def handle_top_command(interaction: discord.Interaction, is_current_month: bool, is_admin: bool):
     # Відповідаємо відразу, що починаємо обробку
