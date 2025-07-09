@@ -12,7 +12,7 @@ load_dotenv()
 class SquadBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
-        intents.message_content = True
+        # Видаляємо privileged intents які не потрібні для slash команд
         super().__init__(command_prefix='!', intents=intents)
         
     async def setup_hook(self):
