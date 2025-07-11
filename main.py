@@ -11,7 +11,6 @@ load_dotenv()
 
 class SquadBot(commands.Bot):
     def __init__(self):
-        # Використовуємо найпростіші intents + права для перевірки серверів
         intents = discord.Intents.none()
         intents.guilds = True  # Потрібно для slash команд та перевірки прав
         super().__init__(command_prefix='!', intents=intents)
@@ -31,7 +30,49 @@ bot = SquadBot()
 
 @bot.tree.command(name="top", description="Топ 100 онлайн за поточний місяць (нік + час)")
 async def top_command(interaction: discord.Interaction):
-    await handle_top_command(interaction, is_current_month=True, is_admin=False)
+    await interaction.response.send_message("🔄 Завантажую дані...", ephemeral=False)
+    
+    try:
+        parser = Parser()
+        players_list = await parser.fetch_and_parse_leaderboard(is_admin=False, is_current_month=True)
+        
+        if not players_list:
+            await interaction.edit_original_response(content="❌ Не вдалося отримати дані. Спробуйте пізніше.")
+            return
+        
+        embeds = []
+        players_per_page = 50  # Показуємо по 50 гравців на сторінку
+        
+        for i in range(0, len(players_list), players_per_page):
+            page_players = players_list[i:i + players_per_page]
+            page_message = ""
+            
+            for j, player in enumerate(page_players):
+                position = i + j + 1
+                # Формат для звичайних користувачів: "1. PlayerName: 1d 2h 3m 4s"
+                line = f"{position}. **{player.name}**: {Tools.format_time(player.value)}"
+                page_message += line + "\n"
+            
+            page_num = (i // players_per_page) + 1
+            total_pages = (len(players_list) + players_per_page - 1) // players_per_page
+            
+            embed = discord.Embed(
+                title=f"Top 100 Online — SQUAD UKRAINE (сторінка {page_num}/{total_pages})",
+                description=page_message,
+                color=discord.Color.blue()
+            )
+            embeds.append(embed)
+        
+        # Надсилаємо перший embed (публічно)
+        await interaction.edit_original_response(content=None, embed=embeds[0])
+        
+        # Надсилаємо інші embed'и як followup повідомлення (також публічно)
+        for embed in embeds[1:]:
+            await interaction.followup.send(embed=embed, ephemeral=False)
+            
+    except Exception as e:
+        print(f"Error in top command: {e}")
+        await interaction.edit_original_response(content="❌ Виникла помилка при отриманні даних. Спробуйте пізніше.")
 
 @bot.tree.command(name="topad", description="Топ 100 онлайн за поточний місяць (нік + час + SteamID) - тільки для адмінів")
 async def top_admin_command(interaction: discord.Interaction):
@@ -197,59 +238,6 @@ async def handle_top_command_admin(interaction: discord.Interaction, is_current_
         
     except Exception as e:
         print(f"Error in admin top command: {e}")
-        await interaction.edit_original_response(content="❌ Виникла помилка при отриманні даних. Спробуйте пізніше.")
-
-async def handle_top_command(interaction: discord.Interaction, is_current_month: bool, is_admin: bool):
-    # Відповідаємо відразу, що починаємо обробку
-    await interaction.response.send_message("🔄 Завантажую дані...", ephemeral=True)
-    
-    try:
-        parser = Parser()
-        players_list = await parser.fetch_and_parse_leaderboard(is_admin, is_current_month)
-        
-        if not players_list:
-            await interaction.edit_original_response(content="❌ Не вдалося отримати дані. Спробуйте пізніше.")
-            return
-        
-        # Розділяємо на частини для уникнення ліміту Discord
-        embeds = []
-        current_message = ""
-        players_per_page = 50  # Показуємо по 50 гравців на сторінку
-        
-        for i in range(0, len(players_list), players_per_page):
-            page_players = players_list[i:i + players_per_page]
-            page_message = ""
-            
-            for j, player in enumerate(page_players):
-                position = i + j + 1
-                if is_admin:
-                    # Формат для адмінів: "1. 76561198123456789 PlayerName: 1d 2h 3m 4s"
-                    line = f"{position}. **{player.steam_id}** **{player.name}**: {Tools.format_time(player.value)}"
-                else:
-                    # Формат для звичайних користувачів: "1. PlayerName: 1d 2h 3m 4s"
-                    line = f"{position}. **{player.name}**: {Tools.format_time(player.value)}"
-                
-                page_message += line + "\n"
-            
-            page_num = (i // players_per_page) + 1
-            total_pages = (len(players_list) + players_per_page - 1) // players_per_page
-            
-            embed = discord.Embed(
-                title=f"Top 100 Online — SQUAD UKRAINE (сторінка {page_num}/{total_pages})",
-                description=page_message,
-                color=discord.Color.blue()
-            )
-            embeds.append(embed)
-        
-        # Надсилаємо перший embed
-        await interaction.edit_original_response(content=None, embed=embeds[0])
-        
-        # Надсилаємо інші embed'и як followup повідомлення
-        for embed in embeds[1:]:
-            await interaction.followup.send(embed=embed, ephemeral=True)
-        
-    except Exception as e:
-        print(f"Error in top command: {e}")
         await interaction.edit_original_response(content="❌ Виникла помилка при отриманні даних. Спробуйте пізніше.")
 
 async def main():
