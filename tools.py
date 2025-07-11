@@ -14,6 +14,17 @@ class Tools:
         return f"{start_date_str}:{end_date_str}"
     
     @staticmethod
+    def get_alternative_period() -> str:
+        """Альтернативний формат періоду - тільки дати без часу"""
+        now = datetime.now(timezone.utc)
+        first_day_of_month = datetime(now.year, now.month, 1, 0, 0, 0, tzinfo=timezone.utc)
+        
+        start_date_str = first_day_of_month.strftime("%Y-%m-%d")
+        end_date_str = now.strftime("%Y-%m-%d")
+        
+        return f"{start_date_str}:{end_date_str}"
+    
+    @staticmethod
     def get_previous_month_period() -> str:
         """Повертає період для попереднього місяця у форматі ISO 8601"""
         now = datetime.now(timezone.utc)
@@ -38,6 +49,24 @@ class Tools:
         
         start_date_str = first_day_of_previous_month.strftime("%Y-%m-%dT%H:%M:%SZ")
         end_date_str = last_day_of_previous_month.strftime("%Y-%m-%dT%H:%M:%SZ")
+        
+        return f"{start_date_str}:{end_date_str}"
+    
+    @staticmethod
+    def get_alternative_previous_month_period() -> str:
+        """Альтернативний формат попереднього місяця - тільки дати"""
+        now = datetime.now(timezone.utc)
+        
+        if now.month == 1:
+            last_day_of_previous_month = datetime(now.year - 1, 12, 31, tzinfo=timezone.utc)
+            first_day_of_previous_month = datetime(now.year - 1, 12, 1, tzinfo=timezone.utc)
+        else:
+            days_in_previous_month = calendar.monthrange(now.year, now.month - 1)[1]
+            last_day_of_previous_month = datetime(now.year, now.month - 1, days_in_previous_month, tzinfo=timezone.utc)
+            first_day_of_previous_month = datetime(now.year, now.month - 1, 1, tzinfo=timezone.utc)
+        
+        start_date_str = first_day_of_previous_month.strftime("%Y-%m-%d")
+        end_date_str = last_day_of_previous_month.strftime("%Y-%m-%d")
         
         return f"{start_date_str}:{end_date_str}"
     
