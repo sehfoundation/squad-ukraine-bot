@@ -64,8 +64,8 @@ class Parser:
         url_sq1 = f"https://api.battlemetrics.com/servers/{Settings.SERVER_ID_SQ_1}/relationships/leaderboards/time"
         url_sq2 = f"https://api.battlemetrics.com/servers/{Settings.SERVER_ID_SQ_2}/relationships/leaderboards/time"
         
-        # Збільшуємо page_size щоб отримати більше гравців
-        page_size = 200  # Збільшено з 100 до 200
+        # Повертаємо page_size до 100 як було раніше
+        page_size = 100
         period = Tools.get_period() if is_current_month else Tools.get_previous_month_period()
         print(f"Period: {period}")
         
@@ -118,10 +118,15 @@ class Parser:
                                        players: List[Player]):
         """Отримує дані гравців з одного сервера"""
         try:
+            print(f"Making request to: {url}")
+            print(f"Params: {params}")
+            
             async with session.get(url, params=params, headers=headers) as response:
                 if response.status == 200:
                     data = await response.json()
                     users = data.get('data', [])
+                    
+                    print(f"Got {len(users)} users from {url}")
                     
                     for user_data in users:
                         try:
@@ -136,7 +141,41 @@ class Parser:
                             print(f"Error parsing player data: {e}")
                             continue
                 else:
+                    # Детальна інформація про помилку
+                    error_text = await response.text()
                     print(f"Failed to fetch data from {url}. Status code: {response.status}")
+                    print(f"Response: {error_text}")
+                    
+                    # Спробуємо альтернативний формат періоду
+                    if response.status == 400:
+                        print("Trying alternative period format...")
+                        alt_period = Tools.get_alternative_period() if params['filter[period]'] == Tools.get_period() else Tools.get_alternative_previous_month_period()
+                        alt_params = params.copy()
+                        alt_params['filter[period]'] = alt_period
+                        print(f"Alternative period: {alt_period}")
+                        
+                        async with session.get(url, params=alt_params, headers=headers) as alt_response:
+                            if alt_response.status == 200:
+                                data = await alt_response.json()
+                                users = data.get('data', [])
+                                print(f"Alternative request successful: {len(users)} users")
+                                
+                                for user_data in users:
+                                    try:
+                                        player_id = int(user_data.get('id', '0'))
+                                        name = user_data.get('attributes', {}).get('name', '')
+                                        value = int(user_data.get('attributes', {}).get('value', '0'))
+                                        
+                                        if player_id and name and value:
+                                            player = Player(name, player_id, value)
+                                            players.append(player)
+                                    except (ValueError, TypeError) as e:
+                                        print(f"Error parsing player data: {e}")
+                                        continue
+                            else:
+                                alt_error = await alt_response.text()
+                                print(f"Alternative request also failed: {alt_response.status}")
+                                print(f"Alternative response: {alt_error}")
         except Exception as e:
             print(f"Error fetching data from {url}: {e}")
     
