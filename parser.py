@@ -21,37 +21,57 @@ class Player:
             'Authorization': f'Bearer {Settings.TOKEN_BM}'
         }
         
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        identifiers = data.get('included', [])
-                        
-                        print(f"Player {self.name} (ID: {self.id}) - found {len(identifiers)} identifiers")
-                        
-                        for identifier in identifiers:
-                            identifier_type = identifier.get('type')
-                            attributes = identifier.get('attributes', {})
-                            attr_type = attributes.get('type')
-                            identifier_value = attributes.get('identifier', '')
+        # Додаємо retry логіку для 429 помилок
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, headers=headers) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            identifiers = data.get('included', [])
                             
-                            print(f"  Identifier: type={identifier_type}, attr_type={attr_type}, value={identifier_value}")
+                            print(f"Player {self.name} (ID: {self.id}) - found {len(identifiers)} identifiers")
                             
-                            if (identifier_type == 'identifier' and attr_type == 'steamID'):
-                                try:
-                                    self.steam_id = int(identifier_value)
-                                    print(f"  ✓ Set Steam ID: {self.steam_id}")
-                                    break
-                                except ValueError:
-                                    print(f"  ✗ Could not parse '{identifier_value}' as int")
-                        
-                        if self.steam_id == 0:
-                            print(f"  ✗ No valid Steam ID found for {self.name}")
-                    else:
-                        print(f"Failed to fetch Steam ID for player {self.id}: HTTP {response.status}")
-        except Exception as e:
-            print(f"Error fetching Steam ID for player {self.id}: {e}")
+                            for identifier in identifiers:
+                                identifier_type = identifier.get('type')
+                                attributes = identifier.get('attributes', {})
+                                attr_type = attributes.get('type')
+                                identifier_value = attributes.get('identifier', '')
+                                
+                                print(f"  Identifier: type={identifier_type}, attr_type={attr_type}, value={identifier_value}")
+                                
+                                if (identifier_type == 'identifier' and attr_type == 'steamID'):
+                                    try:
+                                        self.steam_id = int(identifier_value)
+                                        print(f"  ✓ Set Steam ID: {self.steam_id}")
+                                        return  # Успішно отримали, виходимо
+                                    except ValueError:
+                                        print(f"  ✗ Could not parse '{identifier_value}' as int")
+                            
+                            if self.steam_id == 0:
+                                print(f"  ✗ No valid Steam ID found for {self.name}")
+                            return  # Завершуємо навіть якщо Steam ID не знайдено
+                            
+                        elif response.status == 429:
+                            retry_after = response.headers.get('Retry-After', '10')
+                            wait_time = int(retry_after)
+                            print(f"Rate limited for player {self.id}, waiting {wait_time} seconds (attempt {attempt + 1}/{max_retries})")
+                            if attempt < max_retries - 1:  # Не чекаємо після останньої спроби
+                                await asyncio.sleep(wait_time)
+                                continue
+                            else:
+                                print(f"Failed to fetch Steam ID for player {self.id}: HTTP 429 (max retries exceeded)")
+                                return
+                        else:
+                            print(f"Failed to fetch Steam ID for player {self.id}: HTTP {response.status}")
+                            return
+            except Exception as e:
+                print(f"Error fetching Steam ID for player {self.id}: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2)  # Чекаємо 2 секунди перед retry
+                    continue
+                return
 
 class Parser:
     def __init__(self):
@@ -95,7 +115,8 @@ class Parser:
             players = await self._remove_duplicate_players(players)
             print(f"After deduplication: {len(players)} players")
             
-            if is_admin:
+            # ТИМЧАСОВО вимикаємо отримання Steam ID через rate limiting
+            if is_admin and False:  # Змініть False на True щоб увімкнути Steam ID
                 print("Fetching Steam IDs...")
                 await self._fetch_steam_ids_for_players(players)
                 print("Steam IDs fetched")
@@ -103,6 +124,11 @@ class Parser:
                 # Підрахуємо скільки Steam ID отримано
                 steam_ids_found = sum(1 for p in players if p.steam_id != 0)
                 print(f"Steam IDs found: {steam_ids_found}/{len(players)}")
+            elif is_admin:
+                print("Steam ID fetching disabled due to rate limiting")
+                # Встановлюємо Steam ID як Player ID для тестування
+                for player in players:
+                    player.steam_id = player.id
             
             sorted_players = sorted(players, key=lambda x: x.value, reverse=True)
             result = sorted_players[:100]
@@ -193,16 +219,16 @@ class Parser:
     
     async def _fetch_steam_ids_for_players(self, players: List[Player]):
         """Отримує Steam ID для всіх гравців з обмеженням запитів"""
-        # Зменшуємо затримки та збільшуємо ліміт одночасних запитів
-        semaphore = asyncio.Semaphore(50)  # Збільшено з 30 до 50
+        # Значно зменшуємо навантаження на API
+        semaphore = asyncio.Semaphore(5)  # Зменшено з 50 до 5 одночасних запитів
         
         async def fetch_with_semaphore(player):
             async with semaphore:
                 await player.fetch_steam_id()
-                await asyncio.sleep(0.05)  # Зменшено затримку з 0.1 до 0.05
+                await asyncio.sleep(0.5)  # Збільшено затримку з 0.05 до 0.5 секунд
         
-        # Розбиваємо на батчі по 100 гравців
-        batch_size = 100
+        # Розбиваємо на маленькі батчі по 20 гравців
+        batch_size = 20
         for i in range(0, len(players), batch_size):
             batch = players[i:i + batch_size]
             print(f"Processing Steam ID batch {i//batch_size + 1}/{(len(players) + batch_size - 1)//batch_size} ({len(batch)} players)")
@@ -210,6 +236,7 @@ class Parser:
             tasks = [fetch_with_semaphore(player) for player in batch]
             await asyncio.gather(*tasks)
             
-            # Невелика затримка між батчами
+            # Більша затримка між батчами
             if i + batch_size < len(players):
-                await asyncio.sleep(1)
+                print(f"Waiting 3 seconds before next batch...")
+                await asyncio.sleep(3)
