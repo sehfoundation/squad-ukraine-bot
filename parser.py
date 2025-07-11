@@ -28,16 +28,28 @@ class Player:
                         data = await response.json()
                         identifiers = data.get('included', [])
                         
+                        print(f"Player {self.name} (ID: {self.id}) - found {len(identifiers)} identifiers")
+                        
                         for identifier in identifiers:
-                            if (identifier.get('type') == 'identifier' and 
-                                identifier.get('attributes', {}).get('type') == 'steamID'):
-                                
-                                identifier_value = identifier.get('attributes', {}).get('identifier', '')
+                            identifier_type = identifier.get('type')
+                            attributes = identifier.get('attributes', {})
+                            attr_type = attributes.get('type')
+                            identifier_value = attributes.get('identifier', '')
+                            
+                            print(f"  Identifier: type={identifier_type}, attr_type={attr_type}, value={identifier_value}")
+                            
+                            if (identifier_type == 'identifier' and attr_type == 'steamID'):
                                 try:
                                     self.steam_id = int(identifier_value)
+                                    print(f"  ✓ Set Steam ID: {self.steam_id}")
+                                    break
                                 except ValueError:
-                                    print(f"Identifier '{identifier_value}' cannot be parsed as int.")
-                                break
+                                    print(f"  ✗ Could not parse '{identifier_value}' as int")
+                        
+                        if self.steam_id == 0:
+                            print(f"  ✗ No valid Steam ID found for {self.name}")
+                    else:
+                        print(f"Failed to fetch Steam ID for player {self.id}: HTTP {response.status}")
         except Exception as e:
             print(f"Error fetching Steam ID for player {self.id}: {e}")
 
@@ -52,7 +64,8 @@ class Parser:
         url_sq1 = f"https://api.battlemetrics.com/servers/{Settings.SERVER_ID_SQ_1}/relationships/leaderboards/time"
         url_sq2 = f"https://api.battlemetrics.com/servers/{Settings.SERVER_ID_SQ_2}/relationships/leaderboards/time"
         
-        page_size = 100
+        # Збільшуємо page_size щоб отримати більше гравців
+        page_size = 200  # Збільшено з 100 до 200
         period = Tools.get_period() if is_current_month else Tools.get_previous_month_period()
         print(f"Period: {period}")
         
@@ -86,6 +99,10 @@ class Parser:
                 print("Fetching Steam IDs...")
                 await self._fetch_steam_ids_for_players(players)
                 print("Steam IDs fetched")
+                
+                # Підрахуємо скільки Steam ID отримано
+                steam_ids_found = sum(1 for p in players if p.steam_id != 0)
+                print(f"Steam IDs found: {steam_ids_found}/{len(players)}")
             
             sorted_players = sorted(players, key=lambda x: x.value, reverse=True)
             result = sorted_players[:100]
@@ -137,12 +154,23 @@ class Parser:
     
     async def _fetch_steam_ids_for_players(self, players: List[Player]):
         """Отримує Steam ID для всіх гравців з обмеженням запитів"""
-        semaphore = asyncio.Semaphore(30)  # Обмежуємо кількість одночасних запитів
+        # Зменшуємо затримки та збільшуємо ліміт одночасних запитів
+        semaphore = asyncio.Semaphore(50)  # Збільшено з 30 до 50
         
         async def fetch_with_semaphore(player):
             async with semaphore:
                 await player.fetch_steam_id()
-                await asyncio.sleep(0.1)  # Невелика затримка між запитами
+                await asyncio.sleep(0.05)  # Зменшено затримку з 0.1 до 0.05
         
-        tasks = [fetch_with_semaphore(player) for player in players]
-        await asyncio.gather(*tasks)
+        # Розбиваємо на батчі по 100 гравців
+        batch_size = 100
+        for i in range(0, len(players), batch_size):
+            batch = players[i:i + batch_size]
+            print(f"Processing Steam ID batch {i//batch_size + 1}/{(len(players) + batch_size - 1)//batch_size} ({len(batch)} players)")
+            
+            tasks = [fetch_with_semaphore(player) for player in batch]
+            await asyncio.gather(*tasks)
+            
+            # Невелика затримка між батчами
+            if i + batch_size < len(players):
+                await asyncio.sleep(1)
