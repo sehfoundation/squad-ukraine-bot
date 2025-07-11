@@ -115,8 +115,8 @@ class Parser:
             players = await self._remove_duplicate_players(players)
             print(f"After deduplication: {len(players)} players")
             
-            # ТИМЧАСОВО вимикаємо отримання Steam ID через rate limiting
-            if is_admin and False:  # Змініть False на True щоб увімкнути Steam ID
+            # Увімкнути отримання справжніх Steam ID
+            if is_admin and True:  # Змінено False на True
                 print("Fetching Steam IDs...")
                 await self._fetch_steam_ids_for_players(players)
                 print("Steam IDs fetched")
