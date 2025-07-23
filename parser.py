@@ -24,54 +24,59 @@ class Player:
         # Додаємо retry логіку для 429 помилок
         max_retries = 3
         for attempt in range(max_retries):
+            session = None  # Ініціалізуємо перед try блоком
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, headers=headers) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            identifiers = data.get('included', [])
+                session = aiohttp.ClientSession()
+                async with session.get(url, headers=headers) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        identifiers = data.get('included', [])
+                        
+                        print(f"Player {self.name} (ID: {self.id}) - found {len(identifiers)} identifiers")
+                        
+                        for identifier in identifiers:
+                            identifier_type = identifier.get('type')
+                            attributes = identifier.get('attributes', {})
+                            attr_type = attributes.get('type')
+                            identifier_value = attributes.get('identifier', '')
                             
-                            print(f"Player {self.name} (ID: {self.id}) - found {len(identifiers)} identifiers")
+                            print(f"  Identifier: type={identifier_type}, attr_type={attr_type}, value={identifier_value}")
                             
-                            for identifier in identifiers:
-                                identifier_type = identifier.get('type')
-                                attributes = identifier.get('attributes', {})
-                                attr_type = attributes.get('type')
-                                identifier_value = attributes.get('identifier', '')
-                                
-                                print(f"  Identifier: type={identifier_type}, attr_type={attr_type}, value={identifier_value}")
-                                
-                                if (identifier_type == 'identifier' and attr_type == 'steamID'):
-                                    try:
-                                        self.steam_id = int(identifier_value)
-                                        print(f"  ✓ Set Steam ID: {self.steam_id}")
-                                        return  # Успішно отримали, виходимо
-                                    except ValueError:
-                                        print(f"  ✗ Could not parse '{identifier_value}' as int")
-                            
-                            if self.steam_id == 0:
-                                print(f"  ✗ No valid Steam ID found for {self.name}")
-                            return  # Завершуємо навіть якщо Steam ID не знайдено
-                            
-                        elif response.status == 429:
-                            retry_after = response.headers.get('Retry-After', '10')
-                            wait_time = int(retry_after)
-                            print(f"Rate limited for player {self.id}, waiting {wait_time} seconds (attempt {attempt + 1}/{max_retries})")
-                            if attempt < max_retries - 1:  # Не чекаємо після останньої спроби
-                                await asyncio.sleep(wait_time)
-                                continue
-                            else:
-                                print(f"Failed to fetch Steam ID for player {self.id}: HTTP 429 (max retries exceeded)")
-                                return
+                            if (identifier_type == 'identifier' and attr_type == 'steamID'):
+                                try:
+                                    self.steam_id = int(identifier_value)
+                                    print(f"  ✓ Set Steam ID: {self.steam_id}")
+                                    return  # Успішно отримали, виходимо
+                                except ValueError:
+                                    print(f"  ✗ Could not parse '{identifier_value}' as int")
+                        
+                        if self.steam_id == 0:
+                            print(f"  ✗ No valid Steam ID found for {self.name}")
+                        return  # Завершуємо навіть якщо Steam ID не знайдено
+                        
+                    elif response.status == 429:
+                        retry_after = response.headers.get('Retry-After', '10')
+                        wait_time = int(retry_after)
+                        print(f"Rate limited for player {self.id}, waiting {wait_time} seconds (attempt {attempt + 1}/{max_retries})")
+                        if attempt < max_retries - 1:  # Не чекаємо після останньої спроби
+                            await asyncio.sleep(wait_time)
+                            continue
                         else:
-                            print(f"Failed to fetch Steam ID for player {self.id}: HTTP {response.status}")
+                            print(f"Failed to fetch Steam ID for player {self.id}: HTTP 429 (max retries exceeded)")
                             return
+                    else:
+                        print(f"Failed to fetch Steam ID for player {self.id}: HTTP {response.status}")
+                        return
             except Exception as e:
                 print(f"Error fetching Steam ID for player {self.id}: {e}")
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2)  # Чекаємо 2 секунди перед retry
                     continue
                 return
+            finally:
+                # ВАЖЛИВО: завжди закриваємо сесію
+                if session and not session.closed:
+                    await session.close()
 
 class Parser:
     def __init__(self):
@@ -106,9 +111,13 @@ class Parser:
         players = []
         
         try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
-                await self._fetch_players_from_server(session, url_sq1, params, headers, players)
-                await self._fetch_players_from_server(session, url_sq2, params, headers, players)
+            session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
+            await self._fetch_players_from_server(session, url_sq1, params, headers, players)
+            await self._fetch_players_from_server(session, url_sq2, params, headers, players)
+        finally:
+            # ВАЖЛИВО: завжди закриваємо сесію
+            if 'session' in locals() and not session.closed:
+                await session.close()
             
             print(f"Fetched {len(players)} players before deduplication")
             
