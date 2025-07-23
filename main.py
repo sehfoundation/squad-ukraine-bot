@@ -21,14 +21,25 @@ class SquadBot(commands.Bot):
         
     async def setup_hook(self):
         try:
+            # Очікуємо готовності бота
+            await self.wait_until_ready()
+            
+            # Синхронізуємо команди
             synced = await self.tree.sync()
             print(f"Synced {len(synced)} slash commands")
+            
+            # Виводимо список команд для діагностики
+            for command in synced:
+                print(f"  - {command.name}: {command.description}")
+                
         except Exception as e:
             print(f"Failed to sync commands: {e}")
         
-        # Запускаємо фонові задачі
-        self.data_updater.start()
-        self.auto_update_top.start()
+        # Запускаємо фонові задачі після синхронізації
+        if not self.data_updater.is_running():
+            self.data_updater.start()
+        if not self.auto_update_top.is_running():
+            self.auto_update_top.start()
         
     async def on_ready(self):
         print(f'{self.user} has connected to Discord!')
@@ -69,14 +80,14 @@ def is_admin_user():
 @bot.tree.command(name="top", description="Топ 100 онлайн за поточний місяць (нік + час)")
 @is_allowed_user()
 async def top_command(interaction: discord.Interaction):
-    await interaction.response.send_message("🦍 Завантажую дані з кешу...", ephemeral=False)
+    await interaction.response.send_message("🦍 Завантажую дані з кешу, тримайся хлопець...", ephemeral=False)
     
     try:
         players_list = data_cache.get_current_month_data(with_steam_id=False)
         
         if not players_list:
             status = data_cache.get_cache_status()
-            await interaction.edit_original_response(content=f"🦍 Немає даних в кеші.\n{status}")
+            await interaction.edit_original_response(content=f"🦍 Немає даних в кеші, щось пішло не так.\n{status}")
             return
         
         embeds = create_leaderboard_embeds(players_list, is_admin=False, title_suffix="")
@@ -90,19 +101,19 @@ async def top_command(interaction: discord.Interaction):
             
     except Exception as e:
         print(f"Error in top command: {e}")
-        await interaction.edit_original_response(content="🦍Виникла помилка при отриманні даних.")
+        await interaction.edit_original_response(content="🦍 Ой, щось зламалось при отриманні даних. Спробуй ще раз!")
 
 @bot.tree.command(name="topad", description="Топ 100 онлайн за поточний місяць (Steam ID + нік + час) - тільки для адмінів")
 @is_admin_user()
 async def top_admin_command(interaction: discord.Interaction):
-    await interaction.response.send_message("🔄 Завантажую дані з кешу...", ephemeral=True)
+    await interaction.response.send_message("🦍 Завантажую секретні дані з кешу, це тільки для крутих...", ephemeral=True)
     
     try:
         players_list = data_cache.get_current_month_data(with_steam_id=True)
         
         if not players_list:
             status = data_cache.get_cache_status()
-            await interaction.edit_original_response(content=f"🦍 Немає даних в кеш\n{status}")
+            await interaction.edit_original_response(content=f"🦍 Оу, немає даних в кеші, мабуть щось зламалось.\n{status}")
             return
         
         embeds = create_leaderboard_embeds(players_list, is_admin=True, title_suffix="")
@@ -116,19 +127,19 @@ async def top_admin_command(interaction: discord.Interaction):
             
     except Exception as e:
         print(f"Error in topad command: {e}")
-        await interaction.edit_original_response(content="🦍 Виникла помилка при отриманні даних.")
+        await interaction.edit_original_response(content="🦍 Йой, щось пішло не так з данними. Попробуй ще раз пізніше!")
 
 @bot.tree.command(name="toppr", description="Топ 100 онлайн за попередній місяць (Steam ID + нік + час) - тільки для адмінів")
 @is_admin_user()
 async def top_previous_month_command(interaction: discord.Interaction):
-    await interaction.response.send_message("🔄 Завантажую дані з кешу...", ephemeral=True)
+    await interaction.response.send_message("🦍 Шукаю дані старого місяця в кеші, це займе трошки часу...", ephemeral=True)
     
     try:
         players_list = data_cache.get_previous_month_data()
         
         if not players_list:
             status = data_cache.get_cache_status()
-            await interaction.edit_original_response(content=f"🦍 Немає даних в кеші.\n{status}")
+            await interaction.edit_original_response(content=f"🦍 Хм, немає даних минулого місяця в кеші, щось не грає.\n{status}")
             return
         
         embeds = create_leaderboard_embeds(players_list, is_admin=True, title_suffix=" (попередній місяць)")
@@ -142,7 +153,7 @@ async def top_previous_month_command(interaction: discord.Interaction):
             
     except Exception as e:
         print(f"Error in toppr command: {e}")
-        await interaction.edit_original_response(content="Виникла помилка при отриманні даних.")
+        await interaction.edit_original_response(content="🦍 Аяяй, щось не так з данними минулого місяця. Спробуй пізніше!")
 
 @bot.tree.command(name="randomsquadname", description="Генерує випадкову назву для Squad загону")
 @is_allowed_user()
@@ -181,14 +192,14 @@ async def random_squad_name_command(interaction: discord.Interaction):
     
     # Відповідаємо публічно
     await interaction.response.send_message(
-        f"Випадкова назва загону: {squad_name}",
+        f"🦍 Випадкова назва Squad загону: {squad_name}",
         ephemeral=False
     )
 
 @bot.tree.command(name="autotop", description="Налаштувати автоматичне оновлення топу в цьому каналі")
 @is_admin_user()
 async def auto_top_command(interaction: discord.Interaction):
-    await interaction.response.send_message("Налаштовую автоматичне оновлення...", ephemeral=True)
+    await interaction.response.send_message("🦍 Налаштовую автоматичне оновлення топу, це буде круто...", ephemeral=True)
     
     try:
         # Встановлюємо канал для автооновлень
@@ -197,26 +208,26 @@ async def auto_top_command(interaction: discord.Interaction):
         # Відправляємо початкове повідомлення
         players_list = data_cache.get_current_month_data(with_steam_id=False)
         if players_list:
-            embeds = create_leaderboard_embeds(players_list, is_admin=False, title_suffix=" 🔄")
+            embeds = create_leaderboard_embeds(players_list, is_admin=False, title_suffix=" 🦍")
             message = await interaction.channel.send(embed=embeds[0])
             bot.auto_update_message_id = message.id
             
             await interaction.edit_original_response(
-                content=f"Автоматичне оновлення топу налаштовано в каналі {interaction.channel.mention}\n"
-                        f"Повідомлення буде оновлюватись кожні 10 хвилин"
+                content=f"🦍 Супер! Автоматичне оновлення топу налаштовано в каналі {interaction.channel.mention}\n"
+                        f"🦍 Повідомлення буде оновлюватись кожні 10 хвилин, як годинник!"
             )
         else:
-            await interaction.edit_original_response(content="Немає даних для відображення")
+            await interaction.edit_original_response(content="🦍 Оу, немає даних для показу, щось пішло не так")
             
     except Exception as e:
         print(f"Error in autotop command: {e}")
-        await interaction.edit_original_response(content="Виникла помилка при налаштуванні автооновлення")
+        await interaction.edit_original_response(content="🦍 Ой-ой, щось зламалось при налаштуванні автооновлення")
 
 @bot.tree.command(name="cachestatus", description="Показати статус кешу даних")
 @is_admin_user()
 async def cache_status_command(interaction: discord.Interaction):
     status = data_cache.get_cache_status()
-    next_update = "Невідомо"
+    next_update = "Хз коли"
     
     if data_cache.last_update:
         import time
@@ -225,11 +236,11 @@ async def cache_status_command(interaction: discord.Interaction):
         if time_until_next > 0:
             next_update = f"{int(time_until_next / 60)} хв {int(time_until_next % 60)} сек"
         else:
-            next_update = "Зараз"
+            next_update = "Прямо зараз!"
     
     embed = discord.Embed(
-        title="Статус кешу даних",
-        description=f"{status}\n\n Наступне оновлення: {next_update}",
+        title="🦍 Статус кешу даних",
+        description=f"{status}\n\n🦍 Наступне оновлення: {next_update}",
         color=discord.Color.blue(),
         timestamp=datetime.now(timezone.utc)
     )
@@ -265,7 +276,7 @@ def create_leaderboard_embeds(players_list, is_admin: bool = False, title_suffix
         )
         
         if data_cache.last_update:
-            embed.set_footer(text=f"Оновлено: {data_cache.last_update.strftime('%H:%M:%S UTC')}")
+            embed.set_footer(text=f"🦍 Оновлено: {data_cache.last_update.strftime('%H:%M:%S UTC')}")
         
         embeds.append(embed)
     
@@ -274,7 +285,7 @@ def create_leaderboard_embeds(players_list, is_admin: bool = False, title_suffix
 @tasks.loop(seconds=Settings.DATA_UPDATE_INTERVAL)
 async def data_updater():
     """Фонова задача для оновлення даних кожні 10 хвилин"""
-    print("scheduled")
+    print("🦍 Starting scheduled data update...")
     await data_cache.update_data()
 
 @tasks.loop(minutes=10)
@@ -294,9 +305,9 @@ async def auto_update_top():
         
         players_list = data_cache.get_current_month_data(with_steam_id=False)
         if players_list:
-            embeds = create_leaderboard_embeds(players_list, is_admin=False, title_suffix=" 🔄")
+            embeds = create_leaderboard_embeds(players_list, is_admin=False, title_suffix=" 🦍")
             await message.edit(embed=embeds[0])
-            print(f"Auto-updated top message in channel {channel.name}")
+            print(f"🦍 Auto-updated top message in channel {channel.name}")
         
     except Exception as e:
         print(f"Error in auto update: {e}")
@@ -309,19 +320,18 @@ async def before_data_updater():
 async def before_auto_update():
     await bot.wait_until_ready()
 
-# Обробка помилок доступу
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.CheckFailure):
         await interaction.response.send_message(
-            "У вас немає прав для використання цієї команди.", 
+            "🦍 Ей, у тебе немає прав для цієї команди, хлопець!", 
             ephemeral=True
         )
     else:
         print(f"Command error: {error}")
         if not interaction.response.is_done():
             await interaction.response.send_message(
-                "Виникла помилка при виконанні команди.", 
+                "🦍 Ой-ой, щось пішло не так при виконанні команди!", 
                 ephemeral=True
             )
 
