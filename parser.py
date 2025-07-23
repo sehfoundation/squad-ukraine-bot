@@ -24,7 +24,7 @@ class Player:
         # Додаємо retry логіку для 429 помилок
         max_retries = 3
         for attempt in range(max_retries):
-            session = None  # Ініціалізуємо перед try блоком
+            session = None
             try:
                 session = aiohttp.ClientSession()
                 async with session.get(url, headers=headers) as response:
@@ -46,19 +46,19 @@ class Player:
                                 try:
                                     self.steam_id = int(identifier_value)
                                     print(f"  ✓ Set Steam ID: {self.steam_id}")
-                                    return  # Успішно отримали, виходимо
+                                    return
                                 except ValueError:
                                     print(f"  ✗ Could not parse '{identifier_value}' as int")
                         
                         if self.steam_id == 0:
                             print(f"  ✗ No valid Steam ID found for {self.name}")
-                        return  # Завершуємо навіть якщо Steam ID не знайдено
+                        return
                         
                     elif response.status == 429:
                         retry_after = response.headers.get('Retry-After', '10')
                         wait_time = int(retry_after)
                         print(f"Rate limited for player {self.id}, waiting {wait_time} seconds (attempt {attempt + 1}/{max_retries})")
-                        if attempt < max_retries - 1:  # Не чекаємо після останньої спроби
+                        if attempt < max_retries - 1:
                             await asyncio.sleep(wait_time)
                             continue
                         else:
@@ -70,11 +70,10 @@ class Player:
             except Exception as e:
                 print(f"Error fetching Steam ID for player {self.id}: {e}")
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(2)  # Чекаємо 2 секунди перед retry
+                    await asyncio.sleep(2)
                     continue
                 return
             finally:
-                # ВАЖЛИВО: завжди закриваємо сесію
                 if session and not session.closed:
                     await session.close()
 
@@ -89,7 +88,6 @@ class Parser:
         url_sq1 = f"https://api.battlemetrics.com/servers/{Settings.SERVER_ID_SQ_1}/relationships/leaderboards/time"
         url_sq2 = f"https://api.battlemetrics.com/servers/{Settings.SERVER_ID_SQ_2}/relationships/leaderboards/time"
         
-        # Повертаємо page_size до 100 як було раніше
         page_size = 100
         period = Tools.get_period() if is_current_month else Tools.get_previous_month_period()
         print(f"Period: {period}")
@@ -109,33 +107,27 @@ class Parser:
         }
         
         players = []
+        session = None
         
         try:
             session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
             await self._fetch_players_from_server(session, url_sq1, params, headers, players)
             await self._fetch_players_from_server(session, url_sq2, params, headers, players)
-        finally:
-            # ВАЖЛИВО: завжди закриваємо сесію
-            if 'session' in locals() and not session.closed:
-                await session.close()
             
             print(f"Fetched {len(players)} players before deduplication")
             
             players = await self._remove_duplicate_players(players)
             print(f"After deduplication: {len(players)} players")
             
-            # Увімкнути отримання справжніх Steam ID
-            if is_admin and True:  # Змінено False на True
+            if is_admin and True:
                 print("Fetching Steam IDs...")
                 await self._fetch_steam_ids_for_players(players)
                 print("Steam IDs fetched")
                 
-                # Підрахуємо скільки Steam ID отримано
                 steam_ids_found = sum(1 for p in players if p.steam_id != 0)
                 print(f"Steam IDs found: {steam_ids_found}/{len(players)}")
             elif is_admin:
                 print("Steam ID fetching disabled due to rate limiting")
-                # Встановлюємо Steam ID як Player ID для тестування
                 for player in players:
                     player.steam_id = player.id
             
@@ -147,6 +139,9 @@ class Parser:
         except Exception as e:
             print(f"Error in fetch_and_parse_leaderboard: {e}")
             return []
+        finally:
+            if session and not session.closed:
+                await session.close()
     
     async def _fetch_players_from_server(self, session: aiohttp.ClientSession, url: str, 
                                        params: Dict[str, str], headers: Dict[str, str], 
@@ -176,12 +171,10 @@ class Parser:
                             print(f"Error parsing player data: {e}")
                             continue
                 else:
-                    # Детальна інформація про помилку
                     error_text = await response.text()
                     print(f"Failed to fetch data from {url}. Status code: {response.status}")
                     print(f"Response: {error_text}")
                     
-                    # Спробуємо альтернативний формат періоду
                     if response.status == 400:
                         print("Trying alternative period format...")
                         alt_period = Tools.get_alternative_period() if params['filter[period]'] == Tools.get_period() else Tools.get_alternative_previous_month_period()
@@ -228,15 +221,13 @@ class Parser:
     
     async def _fetch_steam_ids_for_players(self, players: List[Player]):
         """Отримує Steam ID для всіх гравців з обмеженням запитів"""
-        # Значно зменшуємо навантаження на API
-        semaphore = asyncio.Semaphore(5)  # Зменшено з 50 до 5 одночасних запитів
+        semaphore = asyncio.Semaphore(5)
         
         async def fetch_with_semaphore(player):
             async with semaphore:
                 await player.fetch_steam_id()
-                await asyncio.sleep(0.5)  # Збільшено затримку з 0.05 до 0.5 секунд
+                await asyncio.sleep(0.5)
         
-        # Розбиваємо на маленькі батчі по 20 гравців
         batch_size = 20
         for i in range(0, len(players), batch_size):
             batch = players[i:i + batch_size]
@@ -245,7 +236,6 @@ class Parser:
             tasks = [fetch_with_semaphore(player) for player in batch]
             await asyncio.gather(*tasks)
             
-            # Більша затримка між батчами
             if i + batch_size < len(players):
                 print(f"Waiting 3 seconds before next batch...")
                 await asyncio.sleep(3)
