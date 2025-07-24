@@ -42,15 +42,28 @@ class SquadBot(commands.Bot):
         print(f'🦍 {self.user} has connected to Discord!')
         print(f'🦍 Bot is in {len(self.guilds)} guilds')
         
-        # Тимчасово відключаємо фонові задачі для тестування
-        print("🦍 Bot is ready, background tasks disabled for testing...")
-        
-        # Можна вручну оновити дані один раз
+        # Запускаємо фонові задачі після підключення
         try:
+            if not data_updater.is_running():
+                print("🦍 Starting data updater...")
+                data_updater.start()
+            else:
+                print("🦍 Data updater already running")
+            
+            if not auto_update_top.is_running():
+                print("🦍 Starting auto update...")
+                auto_update_top.start()
+            else:
+                print("🦍 Auto update already running")
+                
+            # Ініціалізуємо дані при старті
             print("🦍 Doing initial data update...")
-            asyncio.create_task(data_cache.update_data())
+            await data_cache.update_data()
+            
         except Exception as e:
-            print(f"Error in initial data update: {e}")
+            print(f"Error starting background tasks: {e}")
+            import traceback
+            traceback.print_exc()
 
 bot = SquadBot()
 
@@ -239,14 +252,26 @@ async def cache_status_command(interaction: discord.Interaction):
     
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+@bot.tree.command(name="updatecache", description="Вручну оновити кеш даних")
+@is_admin_user()
+async def update_cache_command(interaction: discord.Interaction):
+    await interaction.response.send_message("🦍 Починаю оновлювати кеш даних, зачекай хвилинку...", ephemeral=True)
+    
+    try:
+        await data_cache.update_data()
+        status = data_cache.get_cache_status()
+        await interaction.edit_original_response(content=f"🦍 Кеш оновлено успішно!\n\n{status}")
+    except Exception as e:
+        print(f"Error in updatecache command: {e}")
+        await interaction.edit_original_response(content="🦍 Йой, щось пішло не так при оновленні кешу!")
+
 def create_leaderboard_embeds(players_list, is_admin: bool = False, title_suffix: str = ""):
     """Створює один embed для лідерборду з усіма гравцями"""
     if not players_list:
         return []
     
-    # Обмежуємо кількість гравців щоб поміститись в один embed
-    max_players = 50 if is_admin else 80  # Steam ID займає більше місця
-    display_players = players_list[:max_players]
+    # Спробуємо показати всіх 100 гравців
+    display_players = players_list[:100]
     
     leaderboard_message = ""
     
@@ -273,9 +298,10 @@ def create_leaderboard_embeds(players_list, is_admin: bool = False, title_suffix
     )
     
     # Додаємо інформацію про кількість показаних гравців
+    actual_shown = min(len(display_players), i + 1) if 'i' in locals() else len(display_players)
     embed.add_field(
         name="🦍 Статистика", 
-        value=f"Показано: {len(display_players)} з {len(players_list)} гравців", 
+        value=f"Показано: {actual_shown} з {len(players_list)} гравців", 
         inline=False
     )
     
