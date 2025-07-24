@@ -42,24 +42,15 @@ class SquadBot(commands.Bot):
         print(f'🦍 {self.user} has connected to Discord!')
         print(f'🦍 Bot is in {len(self.guilds)} guilds')
         
-        # Запускаємо фонові задачі після підключення
+        # Тимчасово відключаємо фонові задачі для тестування
+        print("🦍 Bot is ready, background tasks disabled for testing...")
+        
+        # Можна вручну оновити дані один раз
         try:
-            if not self.data_updater.is_running():
-                print("🦍 Starting data updater...")
-                self.data_updater.start()
-            
-            if not self.auto_update_top.is_running():
-                print("🦍 Starting auto update...")
-                self.auto_update_top.start()
-                
-            # Ініціалізуємо дані при старті (у фоні, щоб не блокувати)
-            print("🦍 Initializing data cache...")
+            print("🦍 Doing initial data update...")
             asyncio.create_task(data_cache.update_data())
-            
         except Exception as e:
-            print(f"Error starting background tasks: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error in initial data update: {e}")
 
 bot = SquadBot()
 
