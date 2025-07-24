@@ -96,12 +96,8 @@ async def top_command(interaction: discord.Interaction):
         
         embeds = create_leaderboard_embeds(players_list, is_admin=False, title_suffix="")
         
-        # Надсилаємо перший embed (публічно)
+        # Надсилаємо один embed
         await interaction.edit_original_response(content=None, embed=embeds[0])
-        
-        # Надсилаємо інші embed'и як followup повідомлення (також публічно)
-        for embed in embeds[1:]:
-            await interaction.followup.send(embed=embed, ephemeral=False)
             
     except Exception as e:
         print(f"Error in top command: {e}")
@@ -122,12 +118,8 @@ async def top_admin_command(interaction: discord.Interaction):
         
         embeds = create_leaderboard_embeds(players_list, is_admin=True, title_suffix="")
         
-        # Надсилаємо перший embed
+        # Надсилаємо один embed
         await interaction.edit_original_response(content=None, embed=embeds[0])
-        
-        # Надсилаємо інші embed'и як followup повідомлення
-        for embed in embeds[1:]:
-            await interaction.followup.send(embed=embed, ephemeral=True)
             
     except Exception as e:
         print(f"Error in topad command: {e}")
@@ -148,12 +140,8 @@ async def top_previous_month_command(interaction: discord.Interaction):
         
         embeds = create_leaderboard_embeds(players_list, is_admin=True, title_suffix=" (попередній місяць)")
         
-        # Надсилаємо перший embed
+        # Надсилаємо один embed
         await interaction.edit_original_response(content=None, embed=embeds[0])
-        
-        # Надсилаємо інші embed'и як followup повідомлення
-        for embed in embeds[1:]:
-            await interaction.followup.send(embed=embed, ephemeral=True)
             
     except Exception as e:
         print(f"Error in toppr command: {e}")
@@ -252,39 +240,49 @@ async def cache_status_command(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 def create_leaderboard_embeds(players_list, is_admin: bool = False, title_suffix: str = ""):
-    """Створює embed'и для лідерборду"""
-    embeds = []
-    players_per_page = 50
+    """Створює один embed для лідерборду з усіма гравцями"""
+    if not players_list:
+        return []
     
-    for i in range(0, len(players_list), players_per_page):
-        page_players = players_list[i:i + players_per_page]
-        page_message = ""
-        
-        for j, player in enumerate(page_players):
-            position = i + j + 1
-            if is_admin:
-                line = f"{position}. **{player.steam_id}** **{player.name}**: {Tools.format_time(player.value)}"
-            else:
-                line = f"{position}. **{player.name}**: {Tools.format_time(player.value)}"
-            
-            page_message += line + "\n"
-        
-        page_num = (i // players_per_page) + 1
-        total_pages = (len(players_list) + players_per_page - 1) // players_per_page
-        
-        embed = discord.Embed(
-            title=f"Top 100 Online — SQUAD UKRAINE{title_suffix} (сторінка {page_num}/{total_pages})",
-            description=page_message,
-            color=discord.Color.blue(),
-            timestamp=datetime.now(timezone.utc)
-        )
-        
-        if data_cache.last_update:
-            embed.set_footer(text=f"🦍 Оновлено: {data_cache.last_update.strftime('%H:%M:%S UTC')}")
-        
-        embeds.append(embed)
+    # Обмежуємо кількість гравців щоб поміститись в один embed
+    max_players = 50 if is_admin else 80  # Steam ID займає більше місця
+    display_players = players_list[:max_players]
     
-    return embeds
+    leaderboard_message = ""
+    
+    for i, player in enumerate(display_players):
+        if is_admin:
+            line = f"{i + 1}. **{player.steam_id}** **{player.name}**: {Tools.format_time(player.value)}"
+        else:
+            line = f"{i + 1}. **{player.name}**: {Tools.format_time(player.value)}"
+        
+        # Перевіряємо чи не перевищуємо ліміт символів Discord (4096)
+        test_message = leaderboard_message + line + "\n"
+        if len(test_message) > 4000:  # Залишаємо трохи місця
+            remaining_count = len(players_list) - i
+            leaderboard_message += f"... та ще {remaining_count} гравців"
+            break
+        
+        leaderboard_message += line + "\n"
+    
+    embed = discord.Embed(
+        title=f"Top 100 Online — SQUAD UKRAINE{title_suffix}",
+        description=leaderboard_message,
+        color=discord.Color.blue(),
+        timestamp=datetime.now(timezone.utc)
+    )
+    
+    # Додаємо інформацію про кількість показаних гравців
+    embed.add_field(
+        name="🦍 Статистика", 
+        value=f"Показано: {len(display_players)} з {len(players_list)} гравців", 
+        inline=False
+    )
+    
+    if data_cache.last_update:
+        embed.set_footer(text=f"🦍 Оновлено: {data_cache.last_update.strftime('%H:%M:%S UTC')}")
+    
+    return [embed]
 
 @tasks.loop(seconds=Settings.DATA_UPDATE_INTERVAL)
 async def data_updater():
