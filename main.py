@@ -68,31 +68,12 @@ class SquadBot(commands.Bot):
 bot = SquadBot()
 
 def is_allowed_user():
-    """Декоратор для перевірки дозволених користувачів"""
+    """Декоратор для перевірки дозволених користувачів - тільки для спеціальних ID"""
     def predicate(interaction: discord.Interaction) -> bool:
         return interaction.user.id in Settings.ALLOWED_USER_IDS
     return app_commands.check(predicate)
 
-def is_admin_user():
-    """Декоратор для перевірки адмін користувачів"""
-    def predicate(interaction: discord.Interaction) -> bool:
-        # Перевіряємо чи користувач в списку дозволених та є адміністратором сервера
-        if interaction.user.id not in Settings.ALLOWED_USER_IDS:
-            return False
-        
-        if not interaction.guild:
-            return True  # Якщо немає гільдії, дозволяємо
-            
-        member = interaction.guild.get_member(interaction.user.id)
-        if not member:
-            return True
-            
-        return (
-            member.guild_permissions.administrator or
-            member.guild_permissions.manage_guild or
-            interaction.guild.owner_id == interaction.user.id
-        )
-    return app_commands.check(predicate)
+# Видаляємо is_admin_user декоратор - більше не потрібен, використовуємо тільки is_allowed_user
 
 @bot.tree.command(name="top", description="Топ 100 онлайн за поточний місяць (нік + час)")
 @is_allowed_user()
@@ -116,8 +97,8 @@ async def top_command(interaction: discord.Interaction):
         print(f"Error in top command: {e}")
         await interaction.edit_original_response(content="🦍 Ой, щось зламалось при отриманні даних. Спробуй ще раз!")
 
-@bot.tree.command(name="topad", description="Топ 100 онлайн за поточний місяць (Steam ID + нік + час) - тільки для адмінів")
-@is_admin_user()
+@bot.tree.command(name="topad", description="Топ 100 онлайн за поточний місяць (Steam ID + нік + час)")
+@is_allowed_user()
 async def top_admin_command(interaction: discord.Interaction):
     await interaction.response.send_message("🦍 Завантажую секретні дані з кешу, це тільки для крутих...", ephemeral=True)
     
@@ -138,8 +119,8 @@ async def top_admin_command(interaction: discord.Interaction):
         print(f"Error in topad command: {e}")
         await interaction.edit_original_response(content="🦍 Йой, щось пішло не так з данними. Попробуй ще раз пізніше!")
 
-@bot.tree.command(name="toppr", description="Топ 100 онлайн за попередній місяць (Steam ID + нік + час) - тільки для адмінів")
-@is_admin_user()
+@bot.tree.command(name="toppr", description="Топ 100 онлайн за попередній місяць (Steam ID + нік + час)")
+@is_allowed_user()
 async def top_previous_month_command(interaction: discord.Interaction):
     await interaction.response.send_message("🦍 Шукаю дані старого місяця в кеші, це займе трошки часу...", ephemeral=True)
     
@@ -161,7 +142,6 @@ async def top_previous_month_command(interaction: discord.Interaction):
         await interaction.edit_original_response(content="🦍 Аяяй, щось не так з данними минулого місяця. Спробуй пізніше!")
 
 @bot.tree.command(name="randomsquadname", description="Генерує випадкову назву для Squad загону")
-@is_allowed_user()
 async def random_squad_name_command(interaction: discord.Interaction):
     # Список прикметників (50 слів)
     adjectives = [
@@ -202,7 +182,7 @@ async def random_squad_name_command(interaction: discord.Interaction):
     )
 
 @bot.tree.command(name="autotop", description="Налаштувати автоматичне оновлення топу в цьому каналі")
-@is_admin_user()
+@is_allowed_user()
 async def auto_top_command(interaction: discord.Interaction):
     await interaction.response.send_message("🦍 Налаштовую автоматичне оновлення топу, це буде круто...", ephemeral=True)
     
@@ -229,7 +209,7 @@ async def auto_top_command(interaction: discord.Interaction):
         await interaction.edit_original_response(content="🦍 Ой-ой, щось зламалось при налаштуванні автооновлення")
 
 @bot.tree.command(name="cachestatus", description="Показати статус кешу даних")
-@is_admin_user()
+@is_allowed_user()
 async def cache_status_command(interaction: discord.Interaction):
     status = data_cache.get_cache_status()
     next_update = "Хз коли"
@@ -253,7 +233,7 @@ async def cache_status_command(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="updatecache", description="Вручну оновити кеш даних")
-@is_admin_user()
+@is_allowed_user()
 async def update_cache_command(interaction: discord.Interaction):
     await interaction.response.send_message("🦍 Починаю оновлювати кеш даних, зачекай хвилинку...", ephemeral=True)
     
