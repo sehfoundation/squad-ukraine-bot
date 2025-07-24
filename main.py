@@ -20,11 +20,10 @@ class SquadBot(commands.Bot):
         self.auto_update_message_id = None
         
     async def setup_hook(self):
+        print("Setting up bot...")
         try:
-            # Очікуємо готовності бота
-            await self.wait_until_ready()
-            
             # Синхронізуємо команди
+            print("Syncing commands...")
             synced = await self.tree.sync()
             print(f"Synced {len(synced)} slash commands")
             
@@ -34,19 +33,33 @@ class SquadBot(commands.Bot):
                 
         except Exception as e:
             print(f"Failed to sync commands: {e}")
+            import traceback
+            traceback.print_exc()
         
-        # Запускаємо фонові задачі після синхронізації
-        if not self.data_updater.is_running():
-            self.data_updater.start()
-        if not self.auto_update_top.is_running():
-            self.auto_update_top.start()
+        print("Setup hook completed")
         
     async def on_ready(self):
-        print(f'{self.user} has connected to Discord!')
-        print(f'Bot is in {len(self.guilds)} guilds')
+        print(f'🦍 {self.user} has connected to Discord!')
+        print(f'🦍 Bot is in {len(self.guilds)} guilds')
         
-        # Ініціалізуємо дані при старті
-        await data_cache.update_data()
+        # Запускаємо фонові задачі після підключення
+        try:
+            if not self.data_updater.is_running():
+                print("🦍 Starting data updater...")
+                self.data_updater.start()
+            
+            if not self.auto_update_top.is_running():
+                print("🦍 Starting auto update...")
+                self.auto_update_top.start()
+                
+            # Ініціалізуємо дані при старті (у фоні, щоб не блокувати)
+            print("🦍 Initializing data cache...")
+            asyncio.create_task(data_cache.update_data())
+            
+        except Exception as e:
+            print(f"Error starting background tasks: {e}")
+            import traceback
+            traceback.print_exc()
 
 bot = SquadBot()
 
@@ -285,16 +298,19 @@ def create_leaderboard_embeds(players_list, is_admin: bool = False, title_suffix
 @tasks.loop(seconds=Settings.DATA_UPDATE_INTERVAL)
 async def data_updater():
     """Фонова задача для оновлення даних кожні 10 хвилин"""
-    print("🦍 Starting scheduled data update...")
-    await data_cache.update_data()
+    try:
+        print("🦍 Starting scheduled data update...")
+        await data_cache.update_data()
+    except Exception as e:
+        print(f"Error in data updater: {e}")
 
 @tasks.loop(minutes=10)
 async def auto_update_top():
     """Фонова задача для автоматичного оновлення топу"""
-    if not Settings.AUTO_UPDATE_CHANNEL_ID or not bot.auto_update_message_id:
-        return
-    
     try:
+        if not Settings.AUTO_UPDATE_CHANNEL_ID or not bot.auto_update_message_id:
+            return
+        
         channel = bot.get_channel(Settings.AUTO_UPDATE_CHANNEL_ID)
         if not channel:
             return
@@ -314,10 +330,12 @@ async def auto_update_top():
 
 @data_updater.before_loop
 async def before_data_updater():
+    print("🦍 Waiting for bot to be ready before starting data updater...")
     await bot.wait_until_ready()
 
 @auto_update_top.before_loop
 async def before_auto_update():
+    print("🦍 Waiting for bot to be ready before starting auto update...")
     await bot.wait_until_ready()
 
 @bot.tree.error
@@ -342,10 +360,17 @@ async def main():
         return
     
     print("Starting bot...")
+    print(f"Bot token present: {bool(token)}")
+    print(f"BM token present: {bool(os.getenv('TOKEN_BM'))}")
+    
     try:
+        print("Creating bot instance...")
+        # Спочатку запускаємо бота без фонових задач
         await bot.start(token)
     except Exception as e:
         print(f"Failed to start bot: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     asyncio.run(main())
