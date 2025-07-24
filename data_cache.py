@@ -13,34 +13,42 @@ class DataCache:
     async def update_data(self):
         """Оновлює кешовані дані з API"""
         if self.is_updating:
-            print("Data update already in progress, skipping...")
+            print("🦍 Data update already in progress, skipping...")
             return
             
         self.is_updating = True
-        print(f"Starting data update at {datetime.now(timezone.utc)}")
+        print(f"🦍 Starting data update at {datetime.now(timezone.utc)}")
         
         try:
             parser = Parser()
             
             # Отримуємо дані поточного місяця
-            print("Fetching current month data...")
+            print("🦍 Fetching current month data...")
             current_data = await parser.fetch_and_parse_leaderboard(is_admin=True, is_current_month=True)
             if current_data:
+                old_count = len(self.current_month_data)
                 self.current_month_data = current_data
-                print(f"Updated current month data: {len(current_data)} players")
+                print(f"🦍 Updated current month data: {old_count} -> {len(current_data)} players")
+            else:
+                print("🦍 No current month data received!")
             
             # Отримуємо дані попереднього місяця
-            print("Fetching previous month data...")
+            print("🦍 Fetching previous month data...")
             previous_data = await parser.fetch_and_parse_leaderboard(is_admin=True, is_current_month=False)
             if previous_data:
+                old_count = len(self.previous_month_data)
                 self.previous_month_data = previous_data
-                print(f"Updated previous month data: {len(previous_data)} players")
+                print(f"🦍 Updated previous month data: {old_count} -> {len(previous_data)} players")
+            else:
+                print("🦍 No previous month data received!")
             
             self.last_update = datetime.now(timezone.utc)
-            print(f"Data update completed at {self.last_update}")
+            print(f"🦍 Data update completed successfully at {self.last_update}")
             
         except Exception as e:
-            print(f"Error during data update: {e}")
+            print(f"🦍 Error during data update: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             self.is_updating = False
     
