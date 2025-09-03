@@ -5,7 +5,8 @@ class Settings:
     TOKEN_BM = os.getenv('TOKEN_BM', '')  # Battlemetrics API token
     TOKEN_BOT = os.getenv('TOKEN_BOT', '')  # Discord bot token
     SERVER_ID_SQ_1 = 30985204
-    SERVER_ID_SQ_2 = 31020814
+    SERVER_ID_SQ_3 = 31020814
+    SERVER_ID_SQ_2 = 4256648
     
     # Список Discord ID користувачів які можуть використовувати ВСІ команди (окрім randomsquadname)
     ALLOWED_USER_IDS: List[int] = [
